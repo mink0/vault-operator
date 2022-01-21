@@ -128,3 +128,79 @@ GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
+
+#
+# User customizations
+#
+
+env_file := $(PROJECT_DIR)/.env
+ifneq ("$(wildcard $(env_file))","")
+	include $(env_file)
+	export
+endif
+
+TOKEN_PATH := ${PROJECT_DIR}/config/samples/sa_token
+init:
+	$(eval export VAULT_JWT_FILE=${TOKEN_PATH}/token)
+	$(eval export K8S_SA_CRT=${TOKEN_PATH}/ca.crt)
+	$(eval export VAULT_ADDR=http://0.0.0.0:8200)
+	$(eval export K8S_API_URL=$(shell kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'))
+
+.PHONY: config
+config: init
+	@echo export VAULT_ADDR=${VAULT_ADDR}
+	@echo export VAULT_JWT_FILE=${VAULT_JWT_FILE}
+
+k8s-create:	# https://github.com/kubernetes-sigs/kind/releases
+	-kind create cluster --name operator --image kindest/node:v1.20.7
+	kubectl cluster-info --context kind-operator
+
+k8s-delete:
+	kind delete cluster --name operator
+
+k8s-get-sa-token:
+	$(eval export SA_SEC_NAME=$(shell kubectl get sa default -o jsonpath="{.secrets[*].name}"))
+	$(eval export SA_JWT_TOKEN=$(shell kubectl get secret ${SA_SEC_NAME} -o jsonpath="{.data.token}"))
+	$(eval export SA_CA_CRT=$(shell kubectl get secret ${SA_SEC_NAME} -o jsonpath="{.data['ca\.crt']}"))
+
+	@echo "${SA_JWT_TOKEN}" | base64 --decode > ${TOKEN_PATH}/token
+	@echo "${SA_CA_CRT}" | base64 --decode > ${TOKEN_PATH}/ca.crt
+
+k8s: k8s-create install samples
+
+samples:
+	kubectl replace --force -f config/samples
+
+vault-server:
+	vault server -tls-skip-verify -dev -dev-root-token-id root -dev-listen-address 0.0.0.0:8200 &
+
+vault-login: init
+	vault login token=root
+
+vault-init: init k8s-get-sa-token vault-login
+	-vault auth enable kubernetes
+
+	vault policy write vault-op \
+		${PROJECT_DIR}/config/samples/vault_policy/default.hcl
+
+	vault write auth/kubernetes/config \
+		token_reviewer_jwt=@${VAULT_JWT_FILE} \
+		kubernetes_host=${K8S_API_URL} \
+		kubernetes_ca_cert=@${K8S_SA_CRT}
+
+	vault write auth/kubernetes/role/vault-op \
+		bound_service_account_names='*' \
+		bound_service_account_namespaces='*' \
+		policies=vault-op \
+		ttl=12h
+
+	vault write auth/kubernetes/login \
+		role=vault-op \
+		jwt=@${VAULT_JWT_FILE}
+
+	vault kv put secret/test username='john doe' password='pa$$w0rd'
+
+vault: vault-server vault-login vault-init
+
+dev: k8s vault
+	air -c .air.toml
