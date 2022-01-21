@@ -1,0 +1,6 @@
+domain: vault.op
+layout:
+- go.kubebuilder.io/v3
+projectName: vault-operator
+repo: github.com/mink0/vault-operator
+version: "3"
