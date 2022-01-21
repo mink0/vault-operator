@@ -3,4 +3,14 @@ layout:
 - go.kubebuilder.io/v3
 projectName: vault-operator
 repo: github.com/mink0/vault-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: vault.op
+  group: apps
+  kind: VaultSecret
+  path: github.com/mink0/vault-operator/api/v1
+  version: v1
 version: "3"
