@@ -202,5 +202,4 @@ vault-init: init k8s-get-sa-token vault-login
 
 vault: vault-server vault-login vault-init
 
-dev: k8s vault
-	air -c .air.toml
+dev: k8s vault run

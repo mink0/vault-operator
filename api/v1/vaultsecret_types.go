@@ -28,8 +28,10 @@ type VaultSecretSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of VaultSecret. Edit vaultsecret_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	VaultAddress string `json:"vaultAddress,omitempty"`
+	Path         string `json:"path,omitempty"`
+	AuthPath     string `json:"authPath,omitempty"`
+	Role         string `json:"role"`
 }
 
 // VaultSecretStatus defines the observed state of VaultSecret
